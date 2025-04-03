@@ -26,6 +26,25 @@ for img_name in sorted(os.listdir(photo_dir)):
         reference_images.append(img)
         reference_points.append(results.pose_landmarks)
 
+# Function to normalize landmarks to relative positions
+def normalize_landmarks(landmarks):
+    base_x = landmarks[0].x
+    base_y = landmarks[0].y
+    return [(lm.x - base_x, lm.y - base_y) for lm in landmarks]
+
+# Function to calculate similarity between two sets of normalized points
+def calculate_similarity(user_points, ref_points, threshold=0.05):
+    if len(user_points) != len(ref_points):
+        return 0.0
+
+    matched_points = 0
+    for user_point, ref_point in zip(user_points, ref_points):
+        distance = np.linalg.norm(np.array(user_point) - np.array(ref_point))
+        if distance < threshold:
+            matched_points += 1
+
+    return matched_points / len(ref_points)
+
 # Open webcam
 cap = cv2.VideoCapture(0)
 
@@ -41,9 +60,24 @@ while cap.isOpened():
     img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = pose.process(img_rgb)
 
+    # Initialize similarity percentage
+    similarity_percentage = 0
+
     # Draw landmarks on the mirrored webcam frame
     if results.pose_landmarks:
         mp_draw.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+
+        # Compare user's points with reference points
+        if reference_points:
+            user_normalized = normalize_landmarks(results.pose_landmarks.landmark)
+            ref_normalized = normalize_landmarks(reference_points[0].landmark)
+            similarity = calculate_similarity(user_normalized, ref_normalized)
+            similarity_percentage = int(similarity * 100)
+            if similarity >= 0.95:
+                cv2.putText(frame, "GOOD JOB POSITION IS CORRECT", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+    # Display similarity percentage at the top of the frame
+    cv2.putText(frame, f"Match: {similarity_percentage}%", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
     # Prepare reference image and points
     if reference_images:
