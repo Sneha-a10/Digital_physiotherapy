@@ -23,10 +23,8 @@ for img_name in sorted(os.listdir(photo_dir)):
     results = pose.process(img_rgb)
 
     if results.pose_landmarks:
-        landmarks = results.pose_landmarks.landmark
-        points = [(lm.x, lm.y) for lm in landmarks]
         reference_images.append(img)
-        reference_points.append(points)
+        reference_points.append(results.pose_landmarks)
 
 # Open webcam
 cap = cv2.VideoCapture(0)
@@ -46,19 +44,24 @@ while cap.isOpened():
     # Draw landmarks on the mirrored webcam frame
     if results.pose_landmarks:
         mp_draw.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-        webcam_points = [(lm.x, lm.y) for lm in results.pose_landmarks.landmark]
 
     # Prepare reference image and points
     if reference_images:
         ref_img = reference_images[0].copy()
-        ref_points = reference_points[0]
-        for point in ref_points:
-            cv2.circle(ref_img, (int(point[0] * ref_img.shape[1]), int(point[1] * ref_img.shape[0])), 5, (0, 255, 0), -1)
+        ref_landmarks = reference_points[0]
 
-        # Resize reference image to match webcam frame height
-        ref_img = cv2.resize(ref_img, (frame.shape[1], frame.shape[0]))
+        # Draw landmarks and connections on the reference image
+        mp_draw.draw_landmarks(ref_img, ref_landmarks, mp_pose.POSE_CONNECTIONS)
 
-    # Concatenate mirrored webcam frame and reference image side by side
+        # Resize reference image to match the webcam frame height while maintaining aspect ratio
+        height, width = frame.shape[:2]
+        ref_height, ref_width = ref_img.shape[:2]
+        scale = height / ref_height  # Scale to match webcam frame height
+        new_width = int(ref_width * scale)
+        new_height = height
+        ref_img = cv2.resize(ref_img, (new_width, new_height))
+
+    # Concatenate mirrored webcam frame and resized reference image side by side
     combined_frame = np.hstack((frame, ref_img))
 
     # Display the combined frame
