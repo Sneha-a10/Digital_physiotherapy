@@ -2,6 +2,9 @@ import cv2
 import mediapipe as mp
 import os
 import numpy as np
+from scipy.spatial import procrustes
+import tkinter as tk
+from tkinter import messagebox
 
 # Initialize MediaPipe Pose
 mp_pose = mp.solutions.pose
@@ -12,6 +15,31 @@ mp_draw = mp.solutions.drawing_utils
 photo_dir = "photo"
 reference_images = []
 reference_points = []
+
+# Function to normalize landmarks using bounding box normalization
+def normalize_landmarks(landmarks):
+    landmarks_array = np.array([(lm.x, lm.y) for lm in landmarks], dtype=np.float32)
+
+    # Get bounding box
+    min_x, min_y = np.min(landmarks_array, axis=0)
+    max_x, max_y = np.max(landmarks_array, axis=0)
+
+    # Normalize to range [0,1]
+    norm_landmarks = (landmarks_array - [min_x, min_y]) / (max_x - min_x, max_y - min_y)
+    
+    return norm_landmarks
+
+# Function to calculate similarity using Procrustes analysis
+def calculate_similarity(user_points, ref_points):
+    if len(user_points) != len(ref_points):
+        return 0.0
+
+    # Apply Procrustes analysis to align both sets of points
+    mtx1, mtx2, disparity = procrustes(user_points, ref_points)
+
+    # Convert disparity to percentage similarity (lower disparity = better match)
+    similarity = max(0, 1 - disparity)  
+    return similarity
 
 # Extract points from images in the photo folder
 for img_name in sorted(os.listdir(photo_dir)):
@@ -24,26 +52,11 @@ for img_name in sorted(os.listdir(photo_dir)):
 
     if results.pose_landmarks:
         reference_images.append(img)
-        reference_points.append(results.pose_landmarks)
+        reference_points.append(normalize_landmarks(results.pose_landmarks.landmark))
 
-# Function to normalize landmarks to relative positions
-def normalize_landmarks(landmarks):
-    base_x = landmarks[0].x
-    base_y = landmarks[0].y
-    return [(lm.x - base_x, lm.y - base_y) for lm in landmarks]
-
-# Function to calculate similarity between two sets of normalized points
-def calculate_similarity(user_points, ref_points, threshold=0.05):
-    if len(user_points) != len(ref_points):
-        return 0.0
-
-    matched_points = 0
-    for user_point, ref_point in zip(user_points, ref_points):
-        distance = np.linalg.norm(np.array(user_point) - np.array(ref_point))
-        if distance < threshold:
-            matched_points += 1
-
-    return matched_points / len(ref_points)
+# Initialize variables for tracking progress
+current_image_index = 0
+match_start_time = None
 
 # Open webcam
 cap = cv2.VideoCapture(0)
@@ -64,48 +77,70 @@ while cap.isOpened():
     similarity_percentage = 0
 
     # Draw landmarks on the mirrored webcam frame
-    if results.pose_landmarks:
+    if results.pose_landmarks and reference_points:
         mp_draw.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
-        # Compare user's points with reference points
-        if reference_points:
-            user_normalized = normalize_landmarks(results.pose_landmarks.landmark)
-            ref_normalized = normalize_landmarks(reference_points[0].landmark)
-            similarity = calculate_similarity(user_normalized, ref_normalized)
-            similarity_percentage = int(similarity * 100)
-            if similarity >= 0.70:  
-                cv2.putText(frame, "GOOD JOB POSITION IS CORRECT", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        # Normalize user points
+        user_normalized = normalize_landmarks(results.pose_landmarks.landmark)
+        ref_normalized = reference_points[current_image_index]
 
-    # Display similarity percentage at the top of the frame with black text and white background
+        # Calculate similarity
+        similarity = calculate_similarity(user_normalized, ref_normalized)
+        similarity_percentage = int(similarity * 100)
+
+        if similarity >= 0.70:  
+            if match_start_time is None:
+                match_start_time = cv2.getTickCount()  
+            else:
+                elapsed_time = (cv2.getTickCount() - match_start_time) / cv2.getTickFrequency()
+                if elapsed_time >= 5:  
+                    current_image_index += 1
+                    match_start_time = None  
+                    if current_image_index >= len(reference_images):
+                        cap.release()
+                        cv2.destroyAllWindows()
+                        
+                        root = tk.Tk()
+                        root.withdraw()  
+                        messagebox.showinfo("Session Complete", "YOU COMPLETED THE SESSION")
+                        root.destroy()
+                        exit() 
+        else:
+            match_start_time = None  
+
+        if similarity >= 0.95:
+            cv2.putText(frame, "✅ 100% Matched! Perfect Position!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        elif similarity >= 0.70:
+            cv2.putText(frame, "✔️ Good Job! Adjust Slightly", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+        else:
+            cv2.putText(frame, "⚠️ Adjust Your Pose!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+    # Display similarity percentage
     text = f"Match: {similarity_percentage}%"
     (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
-    cv2.rectangle(frame, (10, 10), (10 + text_width + 10, 30 + text_height), (255, 255, 255), -1) 
-    cv2.putText(frame, text, (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)  
+    cv2.rectangle(frame, (10, 10), (10 + text_width + 10, 30 + text_height), (255, 255, 255), -1)
+    cv2.putText(frame, text, (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
 
-    # Prepare reference image and points
+    # Prepare reference image
     if reference_images:
-        ref_img = reference_images[0].copy()
-        ref_landmarks = reference_points[0]
+        ref_img = reference_images[current_image_index].copy()
 
-        # Draw landmarks and connections on the reference image
-        mp_draw.draw_landmarks(ref_img, ref_landmarks, mp_pose.POSE_CONNECTIONS)
+        # Draw landmarks on the reference image
+        mp_draw.draw_landmarks(ref_img, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
-        # Resize reference image to match the webcam frame height while maintaining aspect ratio
+        # Resize reference image to match the webcam frame height
         height, width = frame.shape[:2]
-        ref_height, ref_width = ref_img.shape[:2]
-        scale = height / ref_height 
-        new_width = int(ref_width * scale)
-        new_height = height
-        ref_img = cv2.resize(ref_img, (new_width, new_height))
+        ref_img = cv2.resize(ref_img, (width, height))
 
-    # Concatenate mirrored webcam frame and resized reference image side by side
-    combined_frame = np.hstack((frame, ref_img))
+        # Concatenate mirrored webcam frame and resized reference image side by side
+        combined_frame = np.hstack((frame, ref_img))
 
-    # Display the combined frame
-    cv2.imshow("Webcam (Left) | Reference (Right)", combined_frame)
+        # Display the combined frame
+        cv2.imshow("Webcam (Left) | Reference (Right)", combined_frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
 cap.release()
 cv2.destroyAllWindows()
+exit()
