@@ -73,11 +73,14 @@ while cap.isOpened():
             ref_normalized = normalize_landmarks(reference_points[0].landmark)
             similarity = calculate_similarity(user_normalized, ref_normalized)
             similarity_percentage = int(similarity * 100)
-            if similarity >= 0.95:
+            if similarity >= 0.70:  
                 cv2.putText(frame, "GOOD JOB POSITION IS CORRECT", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-    # Display similarity percentage at the top of the frame
-    cv2.putText(frame, f"Match: {similarity_percentage}%", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    # Display similarity percentage at the top of the frame with black text and white background
+    text = f"Match: {similarity_percentage}%"
+    (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
+    cv2.rectangle(frame, (10, 10), (10 + text_width + 10, 30 + text_height), (255, 255, 255), -1) 
+    cv2.putText(frame, text, (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)  
 
     # Prepare reference image and points
     if reference_images:
@@ -90,7 +93,7 @@ while cap.isOpened():
         # Resize reference image to match the webcam frame height while maintaining aspect ratio
         height, width = frame.shape[:2]
         ref_height, ref_width = ref_img.shape[:2]
-        scale = height / ref_height  # Scale to match webcam frame height
+        scale = height / ref_height 
         new_width = int(ref_width * scale)
         new_height = height
         ref_img = cv2.resize(ref_img, (new_width, new_height))
