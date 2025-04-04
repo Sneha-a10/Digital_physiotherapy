@@ -12,7 +12,9 @@ pose = mp_pose.Pose()
 mp_draw = mp.solutions.drawing_utils
 
 # Path to the photo folder
-photo_dir = "photo"
+exercises_dir = "exercises"
+exercise_names = sorted(os.listdir(exercises_dir))  # List of exercise folders
+current_exercise_index = 0
 reference_images = []
 reference_points = []
 
@@ -42,17 +44,23 @@ def calculate_similarity(user_points, ref_points):
     return similarity
 
 # Extract points from images in the photo folder
-for img_name in sorted(os.listdir(photo_dir)):
-    if not img_name.endswith(('.png', '.jpg', '.jpeg')):
-        continue
-    img_path = os.path.join(photo_dir, img_name)
-    img = cv2.imread(img_path)
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    results = pose.process(img_rgb)
+def load_exercise_data(exercise_path):
+    reference_images.clear()
+    reference_points.clear()
+    for img_name in sorted(os.listdir(exercise_path)):
+        if not img_name.endswith(('.png', '.jpg', '.jpeg')):
+            continue
+        img_path = os.path.join(exercise_path, img_name)
+        img = cv2.imread(img_path)
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = pose.process(img_rgb)
 
-    if results.pose_landmarks:
-        reference_images.append(img)
-        reference_points.append(normalize_landmarks(results.pose_landmarks.landmark))
+        if results.pose_landmarks:
+            reference_images.append(img)
+            reference_points.append(normalize_landmarks(results.pose_landmarks.landmark))
+
+# Load the first exercise
+load_exercise_data(os.path.join(exercises_dir, exercise_names[current_exercise_index]))
 
 # Initialize variables for tracking progress
 current_image_index = 0
@@ -88,7 +96,7 @@ while cap.isOpened():
         similarity = calculate_similarity(user_normalized, ref_normalized)
         similarity_percentage = int(similarity * 100)
 
-        if similarity >= 0.70:  
+        if similarity >= 0.90:  
             if match_start_time is None:
                 match_start_time = cv2.getTickCount()  
             else:
@@ -97,23 +105,29 @@ while cap.isOpened():
                     current_image_index += 1
                     match_start_time = None  
                     if current_image_index >= len(reference_images):
-                        cap.release()
-                        cv2.destroyAllWindows()
-                        
-                        root = tk.Tk()
-                        root.withdraw()  
-                        messagebox.showinfo("Session Complete", "YOU COMPLETED THE SESSION")
-                        root.destroy()
-                        exit() 
+                        current_exercise_index += 1
+                        if current_exercise_index >= len(exercise_names):
+                            cap.release()
+                            cv2.destroyAllWindows()
+                            
+                            root = tk.Tk()
+                            root.withdraw()  
+                            messagebox.showinfo("Session Complete", "YOU COMPLETED THE SESSION")
+                            root.destroy()
+                            exit()
+                        else:
+                            # Load the next exercise
+                            load_exercise_data(os.path.join(exercises_dir, exercise_names[current_exercise_index]))
+                            current_image_index = 0 
         else:
             match_start_time = None  
 
-        if similarity >= 0.95:
-            cv2.putText(frame, "✅ 100% Matched! Perfect Position!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        elif similarity >= 0.70:
-            cv2.putText(frame, "✔️ Good Job! Adjust Slightly", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
-        else:
-            cv2.putText(frame, "⚠️ Adjust Your Pose!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        # if similarity >= 0.9:
+        #     cv2.putText(frame, "✅ 100% Matched! Perfect Position!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        # elif similarity >= 0.80:
+        #     cv2.putText(frame, "✔️ Good Job! Adjust Slightly", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+        # else:
+        #     cv2.putText(frame, "⚠️ Adjust Your Pose!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
     # Display similarity percentage
     text = f"Match: {similarity_percentage}%"
@@ -121,12 +135,13 @@ while cap.isOpened():
     cv2.rectangle(frame, (10, 10), (10 + text_width + 10, 30 + text_height), (255, 255, 255), -1)
     cv2.putText(frame, text, (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
 
+    # Display the exercise name
+    exercise_name = exercise_names[current_exercise_index].replace("_", " ").capitalize()
+    cv2.putText(frame, f"Exercise: {exercise_name}", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
     # Prepare reference image
+
     if reference_images:
         ref_img = reference_images[current_image_index].copy()
-
-        # Draw landmarks on the reference image
-        mp_draw.draw_landmarks(ref_img, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
         # Resize reference image to match the webcam frame height
         height, width = frame.shape[:2]
