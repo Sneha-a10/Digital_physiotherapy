@@ -69,7 +69,7 @@ Make sure you have the following installed:
 * **For Streamlit:**
 
     ```bash
-    streamlit run Digital.py 🏃‍♀️
+    streamlit run mbps.py 🏃‍♀️
     ```
 
 ##   🖼️ Screenshots
