@@ -53,16 +53,23 @@ class SportsTherapyApp:
         for img_name in sorted(os.listdir(exercise_path)):
             if img_name.endswith(('.png', '.jpg', '.jpeg')):
                 img_path = os.path.join(exercise_path, img_name)
-                self.reference_images.append(img_path)
-
-                # Load image and extract pose landmarks
                 image = cv2.imread(img_path)
+
+                # Check if the image was loaded successfully
+                if image is None:
+                    st.warning(f"Skipping invalid or corrupted image: {img_name}")
+                    continue
+
                 image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 results = self.pose.process(image_rgb)
 
+                # Check if pose landmarks were detected
                 if results.pose_landmarks:
                     normalized_landmarks = self.normalize_landmarks(results.pose_landmarks.landmark)
+                    self.reference_images.append(img_path)
                     self.reference_points.append(normalized_landmarks)
+                else:
+                    st.warning(f"Skipping image without detectable pose landmarks: {img_name}")
 
     def load_reference_image(self):
         exercise_path = os.path.join(self.exercises_dir, self.exercise_names[self.current_exercise_index])
@@ -72,9 +79,10 @@ class SportsTherapyApp:
 
         self.load_exercise_data(exercise_path)
         if not self.reference_images:
-            st.error(f"No images found in: {exercise_path}")
+            st.error(f"No valid images found in: {exercise_path}")
             st.stop()
 
+        st.write(f"Loaded reference image: {self.reference_images[self.current_image_index]}")
         return self.reference_images[self.current_image_index]
 
     def layout_header(self):
@@ -94,15 +102,24 @@ class SportsTherapyApp:
         # Right column: Live Webcam Feed with Pose Detection
         with col2:
             st.text("Your Pose")
+            stframe = st.empty()  # Placeholder for the video feed
             feedback_placeholder = st.empty()  # Placeholder for feedback
             progress_placeholder = st.empty()  # Placeholder for the progress bar
 
-            # Use Streamlit's camera input
-            camera_input = st.camera_input("Take a picture")
+            # Open the webcam
+            cap = cv2.VideoCapture(0)  # 0 is the default webcam
+            if not cap.isOpened():
+                st.error("Unable to access the webcam.")
+                return
 
-            if camera_input:
-                # Process the captured image
-                frame = cv2.imdecode(np.frombuffer(camera_input.read(), np.uint8), cv2.IMREAD_COLOR)
+            # Continuously capture frames
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    st.error("Unable to read frame from webcam.")
+                    break
+
+                # Convert the frame to RGB
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
                 # Process the frame and calculate similarity
@@ -114,9 +131,32 @@ class SportsTherapyApp:
                     similarity = self.calculate_similarity(user_normalized, ref_normalized)
                     self.similarity_percentage = int(similarity * 100)
 
-                    # Display feedback
+                    # Display feedback only when conditions change
                     if self.similarity_percentage >= 90:
                         feedback_placeholder.success("Perfect Match!")
+                        time.sleep(1)  # Pause briefly to show feedback
+                        self.current_image_index += 1  # Move to the next image
+                        if self.current_image_index >= len(self.reference_images):
+                            self.current_image_index = 0
+                            self.current_exercise_index += 1
+                            if self.current_exercise_index >= len(self.exercise_names):
+                                st.success("Congratulations, you've completed all exercises!")
+                                cap.release()
+                                return
+                            else:
+                                # Load the next exercise
+                                exercise_path = os.path.join(self.exercises_dir, self.exercise_names[self.current_exercise_index])
+                                self.load_exercise_data(exercise_path)
+                                ref_image_path = self.reference_images[self.current_image_index]
+                                ref_image = cv2.imread(ref_image_path)
+                                ref_image_rgb = cv2.cvtColor(ref_image, cv2.COLOR_BGR2RGB)
+                                ref_image_placeholder.image(ref_image_rgb, caption="Ideal Pose", use_container_width=True)
+                        else:
+                            # Update the reference image for the current exercise
+                            ref_image_path = self.reference_images[self.current_image_index]
+                            ref_image = cv2.imread(ref_image_path)
+                            ref_image_rgb = cv2.cvtColor(ref_image, cv2.COLOR_BGR2RGB)
+                            ref_image_placeholder.image(ref_image_rgb, caption="Ideal Pose", use_container_width=True)
                     elif self.similarity_percentage >= 80:
                         feedback_placeholder.warning("Good Effort! Adjust Slightly.")
                     else:
@@ -124,6 +164,14 @@ class SportsTherapyApp:
 
                     # Update the progress bar dynamically
                     self.layout_progress_tracker(progress_placeholder)
+
+                # Display the frame in the Streamlit app
+                stframe.image(frame_rgb, caption="Live Webcam Feed", use_container_width=False)
+
+                # Add a small delay to prevent high CPU usage
+                time.sleep(0.03)
+
+            cap.release()
 
     def layout_progress_tracker(self, progress_placeholder):
         total_exercises = len(self.exercise_names)
