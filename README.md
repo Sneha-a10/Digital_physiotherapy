@@ -8,10 +8,11 @@
 -   [💪 Features](#features)
 -   [⚙️ Technologies Used](#technologies-used)
 -   [🚀 Getting Started](#getting-started)
-    -   [📦 Installation](#installation)
-    -   [▶️ Running the App](#running-the-app)
+    -   [Access the Deployed App](#access-the-deployed-app)
+    -   [📦 Installation](#installation-optional)
+    -   [▶️ Running the App](#running-the-app-optional)
 -   [🖼️ Screenshots](#screenshots)
-
+-   
 ##   🌟 Introduction
 
 Digital_physio is a cutting-edge solution designed to guide users through physiotherapy exercises with precision and ease, right in the comfort of their homes. 🏡 We leverage the power of AI 🧠 to ensure correct posture and maximize the effectiveness of each session. Say goodbye to travel time and hello to accessible, accurate rehabilitation!
@@ -42,14 +43,22 @@ Digital_physio is a cutting-edge solution designed to guide users through physio
 
 ##   🚀 Getting Started
 
-###   🔧 Prerequisites
+###   Access the Deployed App
+
+The Digital_physio application is currently deployed and accessible at:
+
+(https://digital-physiotherapy.onrender.com/) 🔗
+
+You can visit this link to try out the application directly.
+
+###   📦 Installation
+
+####  🔧 Prerequisites
 
 Make sure you have the following installed:
 
 * Python  🐍
 * mediapipe 📦
-
-###   📦 Installation
 
 1.  Clone the repository:
 
