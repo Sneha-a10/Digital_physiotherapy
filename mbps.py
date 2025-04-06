@@ -94,24 +94,15 @@ class SportsTherapyApp:
         # Right column: Live Webcam Feed with Pose Detection
         with col2:
             st.text("Your Pose")
-            stframe = st.empty()  # Placeholder for the video feed
             feedback_placeholder = st.empty()  # Placeholder for feedback
             progress_placeholder = st.empty()  # Placeholder for the progress bar
 
-            # Open the webcam
-            cap = cv2.VideoCapture(0)  # 0 is the default webcam
-            if not cap.isOpened():
-                st.error("Unable to access the webcam.")
-                return
+            # Use Streamlit's camera input
+            camera_input = st.camera_input("Take a picture")
 
-            # Continuously capture frames
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    st.error("Unable to read frame from webcam.")
-                    break
-
-                # Convert the frame to RGB
+            if camera_input:
+                # Process the captured image
+                frame = cv2.imdecode(np.frombuffer(camera_input.read(), np.uint8), cv2.IMREAD_COLOR)
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
                 # Process the frame and calculate similarity
@@ -123,32 +114,9 @@ class SportsTherapyApp:
                     similarity = self.calculate_similarity(user_normalized, ref_normalized)
                     self.similarity_percentage = int(similarity * 100)
 
-                    # Display feedback only when conditions change
+                    # Display feedback
                     if self.similarity_percentage >= 90:
                         feedback_placeholder.success("Perfect Match!")
-                        time.sleep(1)  # Pause briefly to show feedback
-                        self.current_image_index += 1  # Move to the next image
-                        if self.current_image_index >= len(self.reference_images):
-                            self.current_image_index = 0
-                            self.current_exercise_index += 1
-                            if self.current_exercise_index >= len(self.exercise_names):
-                                st.success("Congratulations, you've completed all exercises!")
-                                cap.release()
-                                return
-                            else:
-                                # Load the next exercise
-                                exercise_path = os.path.join(self.exercises_dir, self.exercise_names[self.current_exercise_index])
-                                self.load_exercise_data(exercise_path)
-                                ref_image_path = self.reference_images[self.current_image_index]
-                                ref_image = cv2.imread(ref_image_path)
-                                ref_image_rgb = cv2.cvtColor(ref_image, cv2.COLOR_BGR2RGB)
-                                ref_image_placeholder.image(ref_image_rgb, caption="Ideal Pose", use_container_width=True)
-                        else:
-                            # Update the reference image for the current exercise
-                            ref_image_path = self.reference_images[self.current_image_index]
-                            ref_image = cv2.imread(ref_image_path)
-                            ref_image_rgb = cv2.cvtColor(ref_image, cv2.COLOR_BGR2RGB)
-                            ref_image_placeholder.image(ref_image_rgb, caption="Ideal Pose", use_container_width=True)
                     elif self.similarity_percentage >= 80:
                         feedback_placeholder.warning("Good Effort! Adjust Slightly.")
                     else:
@@ -156,14 +124,6 @@ class SportsTherapyApp:
 
                     # Update the progress bar dynamically
                     self.layout_progress_tracker(progress_placeholder)
-
-                # Display the frame in the Streamlit app
-                stframe.image(frame_rgb, caption="Live Webcam Feed", use_container_width=False)
-
-                # Add a small delay to prevent high CPU usage
-                time.sleep(0.03)
-
-            cap.release()
 
     def layout_progress_tracker(self, progress_placeholder):
         total_exercises = len(self.exercise_names)
