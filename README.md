@@ -12,7 +12,7 @@
     -   [📦 Installation](#installation-optional)
     -   [▶️ Running the App](#running-the-app-optional)
 -   [🖼️ Screenshots](#screenshots)
--   
+
 ##   🌟 Introduction
 
 Digital_physio is a cutting-edge solution designed to guide users through physiotherapy exercises with precision and ease, right in the comfort of their homes. 🏡 We leverage the power of AI 🧠 to ensure correct posture and maximize the effectiveness of each session. Say goodbye to travel time and hello to accessible, accurate rehabilitation!
@@ -80,7 +80,3 @@ Make sure you have the following installed:
     ```bash
     streamlit run mbps.py 🏃‍♀️
     ```
-
-##   🖼️ Screenshots
-
-(Include screenshots or GIFs of your app in action. This is VERY important!)
